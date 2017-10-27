@@ -10,7 +10,7 @@ import sys
 
 es = Elasticsearch()
 keyWord = str(sys.argv[1])
-response = es.search(index="1111", doc_type="TREC_HKCD",body = {    "query" : { "match" : { "content" : keyWord }},
+response = es.search(index="trec", doc_type="HKCD",body = {    "query" : { "match" : { "content" : keyWord }},
     "highlight" : {
         "pre_tags" : ["<tag1>", "<tag2>"],
         "post_tags" : ["</tag1>", "</tag2>"],

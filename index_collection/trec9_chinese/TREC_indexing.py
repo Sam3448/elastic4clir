@@ -42,6 +42,7 @@ def extract_documents(filename, docType, es):
 #                     section = doc.find('section').text.rstrip().lstrip()#what if value is null?
 #                     print str(count),docno,text.encode('utf-8')
                     count +=1
+                    print (docType)
                     index_document(docno, text, docid, es, docType)
         except Exception as e:
             print ("Parsing error in %s: %s" % (filename, str(e)))
