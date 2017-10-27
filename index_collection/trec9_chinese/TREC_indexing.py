@@ -5,9 +5,12 @@ import codecs
 import gzip
 import os
 import datetime
+import requests
 
-datadir="/Users/SamZhang/Documents/RA2017/src/dataset/TREC/trec9_chinese/docs" 
 
+
+#datadir="/Users/SamZhang/Documents/RA2017/src/dataset/TREC/trec9_chinese/docs" 
+datadir='/home/sachith/CLIR/DUH/data/trec9_chinese/docs'
 
 # In[224]:
 
@@ -18,7 +21,9 @@ def index_document(docno, text, docid, es, docType):
     reference: https://www.elastic.co/guide/en/elasticsearch/client/python-api/current/index.html
     '''
     res = text.split("\n")
-    es.index(index="trec", doc_type=docType, id=docid, body={"content":res})
+    #es.index(index="trec", doc_type=docType, id=docid, body={"content":res})
+    #Add doc number as ID instead of docid
+    es.index(index="trec", doc_type=docType, id=docno, body={"content":res})
 
 
 # In[203]:
@@ -42,7 +47,6 @@ def extract_documents(filename, docType, es):
 #                     section = doc.find('section').text.rstrip().lstrip()#what if value is null?
 #                     print str(count),docno,text.encode('utf-8')
                     count +=1
-                    print (docType)
                     index_document(docno, text, docid, es, docType)
         except Exception as e:
             print ("Parsing error in %s: %s" % (filename, str(e)))
@@ -64,6 +68,7 @@ mapping = '''
     }
   }
 }'''
+#es.indices.delete(index='trec')
 es.indices.create(index='trec', ignore=400, body=mapping)
 
 
