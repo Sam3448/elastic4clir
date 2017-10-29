@@ -78,7 +78,7 @@ def prec_recall_graph(FIN_OUT):
         plt.annotate('Mean Average Precision\n(MAP) = '+ str(MAP), xy=(0.4, MAP), xytext=(0.6, max(prec)/3),\
             arrowprops=dict(facecolor='black', shrink=0.05),\
             )
-        plt.savefig('P_r_graph.png')
+        plt.savefig('P_r_graph_TREC.png')
 
 
 def eval(query_file, ref_out_file, SEARCH_OUT, TREC_PATH):
@@ -107,7 +107,7 @@ def eval(query_file, ref_out_file, SEARCH_OUT, TREC_PATH):
         sys.exit
     
     #File to store final output
-    FIN_OUT = "results.txt"
+    FIN_OUT = "results_TREC.txt"
     fin_out = open(FIN_OUT, 'w')
     print (subprocess.list2cmdline([TREC_EXEC, ref_out_file, SEARCH_OUT]))
     subprocess.call([TREC_EXEC, ref_out_file, SEARCH_OUT], stdout = fin_out)
@@ -123,7 +123,7 @@ if __name__ == '__main__':
     TREC_PATH = '/home/sachith/CLIR/DUH/elastic4clir/evaluation/trec_eval.9.0'
     
     #File to store search output
-    SEARCH_OUT = "search_output.txt"
+    SEARCH_OUT = "search_output_TREC.txt"
     
 
         

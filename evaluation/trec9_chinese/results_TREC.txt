@@ -7,9 +7,9 @@ map                   	all	0.0097
 gm_map                	all	0.0003
 Rprec                 	all	0.0232
 bpref                 	all	0.0202
-recip_rank            	all	0.2109
+recip_rank            	all	0.2104
 iprec_at_recall_0.00  	all	0.2217
-iprec_at_recall_0.10  	all	0.0238
+iprec_at_recall_0.10  	all	0.0237
 iprec_at_recall_0.20  	all	0.0053
 iprec_at_recall_0.30  	all	0.0000
 iprec_at_recall_0.40  	all	0.0000
