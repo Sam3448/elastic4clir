@@ -16,7 +16,8 @@ def search(keyWord):
     "bool": {
       "should": [
         { "match": { "content": keyWord } },
-        { "match": { "title": keyWord } }
+        { "match": { "title": keyWord } },
+        { "match": { "author": keyWord } }
       ]
     }
   },
@@ -36,6 +37,4 @@ if __name__ == '__main__':
         sys.exit()
     
     res = search(str(sys.argv[1]))
-    for each_doc in res['hits']['hits']:
-        print(each_doc['_id'], each_doc['_score'])
     print (json.dumps(res, indent=4))
