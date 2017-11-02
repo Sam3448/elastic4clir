@@ -8,11 +8,8 @@ import collections
 import matplotlib.pyplot as plt
 from bs4 import BeautifulSoup
 import json
-
-#include path to index and search code
-sys.path.append('/home/sachith/CLIR/DUH/elastic4clir/index_collection/CACM')
-from CACM_search import search
-
+import importlib
+from configparser import SafeConfigParser
 
 #Given a query file, it maps the query number to the query
 def get_queries(query_file):
@@ -59,7 +56,7 @@ def get_queries(query_file):
 #Runs evaluation given queries, gold output and our output.
 #Returns the path to result file
 
-def prec_recall_graph(FIN_OUT):
+def prec_recall_graph(output_path, FIN_OUT):
     with open(FIN_OUT , 'r') as f:
         MAP = 0
         prec = [0]*11
@@ -83,10 +80,12 @@ def prec_recall_graph(FIN_OUT):
         plt.annotate('Mean Average Precision\n(MAP) = '+ str(MAP), xy=(0.4, MAP), xytext=(0.6, max(prec)/3),\
             arrowprops=dict(facecolor='black', shrink=0.05),\
             )
-        plt.savefig('P_r_graph_cacm.png')
+        plt.savefig(os.path.join(output_path, "P-r-graph_cacm.png"))
 
 
-def eval(query_file, ref_out_file, SEARCH_OUT, TREC_PATH):
+def eval(query_file, ref_out_file, output_path, TREC_PATH, search):
+    #File to store search output
+    SEARCH_OUT = os.path.join(output_path, "search_output_cacm.txt")
     f_out = open(SEARCH_OUT,'w');
     queries = get_queries(query_file)
 
@@ -113,28 +112,48 @@ def eval(query_file, ref_out_file, SEARCH_OUT, TREC_PATH):
         sys.exit
     
     #File to store final output
-    FIN_OUT = "results_cacm.txt"
+    FIN_OUT = os.path.join(output_path, "results_cacm.txt")
     fin_out = open(FIN_OUT, 'w')
     print (subprocess.list2cmdline([TREC_EXEC, ref_out_file, SEARCH_OUT]))
     subprocess.call([TREC_EXEC, ref_out_file, SEARCH_OUT], stdout = fin_out)
     fin_out.close()
-    prec_recall_graph(FIN_OUT)
+    prec_recall_graph(output_path, FIN_OUT)
     return FIN_OUT
     
 
 if __name__ == '__main__':
-    USAGE = '\nUSAGE : python TREC_eval.py <query_file> <ref_output> \n'
+    USAGE = '\nUSAGE : python CACM_eval.py <config-file> \n'
     
-    #Path to TREC_Eval C-code
-    TREC_PATH = '/home/sachith/CLIR/DUH/elastic4clir/evaluation/trec_eval.9.0'
-    
-    #File to store search output
-    SEARCH_OUT = "search_output_cacm.txt"
-    
-
-        
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 2:
         print (USAGE)
         sys.exit()
     
-    eval(sys.argv[1], sys.argv[2], SEARCH_OUT, TREC_PATH)
+    parser = SafeConfigParser({'output_path' : os.getcwd()})
+    parser.read(sys.argv[1])
+    
+    if not (parser.has_option('Evaluation', 'search_script') or 
+            parser.has_option('Evaluation', 'trec_eval_path') or
+            parser.has_option('Evaluation', 'query_file') or
+            parser.has_option('Evaluation', 'reference_file')):
+        print ("Invalid/Incomplete Evaluation parameters in config file")
+        sys.exit()
+
+    search_script = parser.get('Evaluation', 'search_script')
+    TREC_PATH = parser.get('Evaluation', 'trec_eval_path')
+    query_file = parser.get('Evaluation', 'query_file')
+    reference_file = parser.get('Evaluation', 'reference_file')
+    output_path = parser.get('Evaluation', 'output_path')
+    
+    #Import search module
+    search_dir, search_file = os.path.split(search_script)
+    if search_dir != '':
+        sys.path.append(search_dir)
+        #print (sys.path)
+    if search_file == '':
+        print ("Invalid search_script provided in Evaluation config")
+        sys.exit()
+    else:
+        mod = importlib.import_module(search_file.replace('.py', ''))
+        search_func = getattr(mod, 'search')   
+    
+    eval(query_file, reference_file, output_path, TREC_PATH, search_func)
