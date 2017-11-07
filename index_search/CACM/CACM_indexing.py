@@ -8,11 +8,11 @@ import datetime
 import configparser
 import sys
 
-datadir="/Users/SamZhang/Documents/RA2017/lucene4ir/data/cacm/cacm_form" 
 configFile = str(sys.argv[1])
 
 config = configparser.ConfigParser()
 config.read(configFile)
+datadir = config['mapping']['datadir']
 docIndex = config['mapping']['index']
 analyzer_name = config['mapping']['analyzer']
 search_analyzer_name = config['mapping']['search_analyzer']
