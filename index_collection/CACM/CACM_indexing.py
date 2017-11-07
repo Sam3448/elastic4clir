@@ -6,19 +6,19 @@ import gzip
 import os
 import datetime
 
-datadir="/Users/SamZhang/Documents/RA2017/lucene4ir/data/cacm/cacm_form" 
+datadir="/home/sachith/CLIR/DUH/data/cacm/cacm_form" 
 
 
 # In[224]:
 
 
-def index_document(title, text, docid, es):
+def index_document(title, text, author, docid, es):
     '''
     todo: submit docno,text pair to index via es.index()
     reference: https://www.elastic.co/guide/en/elasticsearch/client/python-api/current/index.html
     '''
     docType = 'old'
-    es.index(index="cacm", doc_type=docType, id=docid, body={"title" : title, "content":text})
+    es.index(index="cacm", doc_type=docType, id=docid, body={"title" : title, "content":text, "author" : author})
 
 
 # In[203]:
@@ -30,7 +30,7 @@ def extract_documents(filename, es):
     '''
     with open(filename) as cacmfile:
         soup = BeautifulSoup(cacmfile, "html.parser")
-        print ('here')
+        #print ('here')
         count = 0
         try:
             for doc in soup.find_all('doc'):
@@ -39,15 +39,13 @@ def extract_documents(filename, es):
                     title = doc.find('doct').text.rstrip().lstrip()
                     abstract = ''
                     if doc.find('docw'):
-                        abstract = doc.find('docw').text.rstrip().lstrip()
-                    print(docid)
-                    print(abstract)
-#                     if doc.find('headline'):
-#                         headline = doc.find('headline').text.rstrip().lstrip()
-#                     section = doc.find('section').text.rstrip().lstrip()#what if value is null?
-#                     print str(count),docno,text.encode('utf-8')
+                        abstract = doc.find('docw').text.strip()
+                    
+                    author = ''
+                    if doc.find('doca'):
+                        author = doc.find('doca').text.strip()
                     count +=1
-                    index_document(title, abstract, docid, es)
+                    index_document(title, abstract, author, docid, es)
         except Exception as e:
             print ("Parsing error in %s: %s" % (filename, str(e)))
             return doc

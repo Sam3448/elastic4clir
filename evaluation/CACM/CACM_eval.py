@@ -7,6 +7,7 @@ import subprocess
 import collections
 import matplotlib.pyplot as plt
 from bs4 import BeautifulSoup
+import json
 import importlib
 from configparser import SafeConfigParser
 
@@ -16,36 +17,40 @@ def get_queries(query_file):
         return None
     
     query_dict = collections.OrderedDict()
+    cur_tok = ''
+    cur_query_num = -1
+    
+    with open(query_file, 'r') as f:
+        for cur_line in f:
+            cur_line = cur_line.strip()
+            
+            if cur_line.startswith('.I'):
+                tmp_toks = cur_line.split()
+                if len(tmp_toks) == 2 and tmp_toks[1].isdigit():
+                    cur_query_num = int(tmp_toks[1])
+                    query_dict[cur_query_num] = {}
+                else:
+                    print ("Errenous data format for Index (.I)")
+                    sys.exit()
 
-
-    #Query pattern is currently CH55 for #55
-
-    p = re.compile('CH(\d+)')
-    with open(query_file, 'r') as f_query:
-        soup = BeautifulSoup(f_query, "lxml")
-        count = 0
-        try:
-            for doc in soup.find_all('top'):
-                #Consider only if num, title and desc are present , narr is taken optional
-                if doc.find('num') and doc.find('title') and doc.find('desc'):
-                    m = p.search(doc.find('num').text.strip())
-                    if m is None:
-                        continue
-                    num = int(m.group()[2:])
-                    title = doc.find('title').text.strip()
-                    desc = doc.find('desc').text.strip()
-                    narr = ""
-                    if doc.find('narr'):
-                        narr = doc.find('narr').text.strip()
-                    count +=1
-                    query_dict[num] = {}
-                    query_dict[num]['title'] = title
-                    query_dict[num]['desc'] = desc
-                    query_dict[num]['narr'] = narr
-                    #print ("Added query",num)
-        except Exception as e:
-            print ("Parsing error in query file %s: %s" % (query_file, str(e)))
-            return None
+            elif cur_line.startswith('.T'):
+               cur_tok = '.T'
+            elif cur_line.startswith('.B'):
+               cur_tok = '.B'
+            elif cur_line.startswith('.A'):
+               cur_tok = '.A'
+            elif cur_line.startswith('.N'):
+               cur_tok = '.N'
+            elif cur_line.startswith('.X'):
+               cur_tok = '.X'
+            elif cur_line.startswith('.W'):
+               cur_tok = '.W'
+            
+            elif cur_tok == '.T' or cur_tok == '.B' or cur_tok == '.A' or cur_tok == '.N' or cur_tok == '.X' or cur_tok == '.W':
+                if cur_tok not in query_dict[cur_query_num]:
+                    query_dict[cur_query_num][cur_tok] = cur_line
+                else:
+                    query_dict[cur_query_num][cur_tok] = query_dict[cur_query_num][cur_tok] + ' \n ' + cur_line
     return query_dict
 
 #Runs evaluation given queries, gold output and our output.
@@ -75,18 +80,20 @@ def prec_recall_graph(output_path, FIN_OUT):
         plt.annotate('Mean Average Precision\n(MAP) = '+ str(MAP), xy=(0.4, MAP), xytext=(0.6, max(prec)/3),\
             arrowprops=dict(facecolor='black', shrink=0.05),\
             )
-        plt.savefig(os.path.join(output_path,'P_r_graph_TREC.png'))
+        plt.savefig(os.path.join(output_path, "P-r-graph_cacm.png"))
 
 
 def eval(query_file, ref_out_file, output_path, TREC_PATH, search):
-    SEARCH_OUT = os.path.join(output_path, "search_output_trec.txt")
-    f_out = open(SEARCH_OUT,'w')
+    #File to store search output
+    SEARCH_OUT = os.path.join(output_path, "search_output_cacm.txt")
+    f_out = open(SEARCH_OUT,'w');
     queries = get_queries(query_file)
+
     if queries is None or len(queries) == 0:
         print ("\nInvalid or Bad Query File. Exiting Evaluation module\n")
         sys.exit
     for q_num in queries:
-        q_string =  queries[q_num]['title']
+        q_string =  queries[q_num]['.W']
         res = search(q_string)
         for each_doc in res['hits']['hits']:
             f_out.write(str(q_num) + " " + "1" + " " + each_doc['_id'] + " " + "-1" + " " + str(each_doc['_score']) + " " + "STANDARD" + "\n")
@@ -105,7 +112,7 @@ def eval(query_file, ref_out_file, output_path, TREC_PATH, search):
         sys.exit
     
     #File to store final output
-    FIN_OUT = os.path.join(output_path, "results_trec.txt")
+    FIN_OUT = os.path.join(output_path, "results_cacm.txt")
     fin_out = open(FIN_OUT, 'w')
     print (subprocess.list2cmdline([TREC_EXEC, ref_out_file, SEARCH_OUT]))
     subprocess.call([TREC_EXEC, ref_out_file, SEARCH_OUT], stdout = fin_out)
@@ -115,7 +122,7 @@ def eval(query_file, ref_out_file, output_path, TREC_PATH, search):
     
 
 if __name__ == '__main__':
-    USAGE = '\n USAGE : python TREC_eval.py <config_file> \n'
+    USAGE = '\nUSAGE : python CACM_eval.py <config-file> \n'
     
     if len(sys.argv) != 2:
         print (USAGE)
@@ -141,6 +148,7 @@ if __name__ == '__main__':
     search_dir, search_file = os.path.split(search_script)
     if search_dir != '':
         sys.path.append(search_dir)
+        #print (sys.path)
     if search_file == '':
         print ("Invalid search_script provided in Evaluation config")
         sys.exit()
