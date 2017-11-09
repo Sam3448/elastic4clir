@@ -1,0 +1,10 @@
+# Trec9_chinese 
+
+## Indexing
+
+ run  `python TREC_indexing.py <config_file>`
+
+
+##Search
+
+ run  `python TREC_search.py <query>`
