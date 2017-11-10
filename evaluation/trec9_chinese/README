@@ -1,0 +1,15 @@
+# TREC9_Chinese
+
+## Evaluation
+
+ run    `python TREC_eval.py <config-file>`
+
+The config file contains the paths to query file, reference output and path to TREC_eval C-code.
+
+It creates the following files:
+
+    P-r-graph_TREC.png : Plot of Precison Recall graph
+
+    results_trec.txt  : Final results
+
+    search_output_trec.txt : Output of search module

@@ -1,0 +1,10 @@
+# CACM 
+
+## Indexing
+
+ run  `python CACM_indexing.py <config_file>`
+
+
+##Search
+
+ run  `python CACM_search.py <query>`

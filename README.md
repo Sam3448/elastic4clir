@@ -5,6 +5,7 @@ ElasticSearch package for Cross-lingual Information Retrieval
 Under this directory:
 
 * index_research: all scripts for indexing and searching. Right now two datasets are included: TREC and CACM.
+  And now we have Wiki_sw dataset ready for indexing and searching. 
 
 * evaluation: all evaluation scripts.
 
