@@ -12,7 +12,7 @@ def search(keyWord):
     es = Elasticsearch()
     #Removed Doc_type for Evaluation Metric
     #Also added size paramter as it defaults to 10
-    response = es.search(index="wiki_sw", body = { "size" : 100,   "query": {
+    response = es.search(index="wiki_sw", body = { "size" : 5,   "query": {
     "bool": {
       "should": [
         { "match": { "content": keyWord } },

@@ -1,0 +1,15 @@
+# CACM
+
+## Evaluation
+
+ run    `python CACM_eval.py <config-file>`
+
+The config file contains the paths to query file, reference output and path to TREC_eval C-code.
+
+It creates the following files:
+
+    P-r-graph_cacm.png : Plot of Precison Recall graph
+
+    results_cacm.txt  : Final results
+
+    search_output_cacm.txt : Output of search module
