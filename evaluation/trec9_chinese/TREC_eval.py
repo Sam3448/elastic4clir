@@ -9,6 +9,86 @@ import matplotlib.pyplot as plt
 from bs4 import BeautifulSoup
 import importlib
 from configparser import SafeConfigParser
+from collections import OrderedDict
+from elasticsearch import Elasticsearch
+
+
+#Implements the AQWV metric
+def AQWV(ref_file, out_file, es_index):
+    
+    #Populate the reference outputs
+    ref_out = {}
+    with open(ref_file, 'r') as f_ref:
+        for cur_line in f_ref:
+            toks = cur_line.strip().split()
+            assert len(toks) == 4
+            
+            q_id = toks[0]; doc_id = toks[2]; rel = int(toks[3]);
+            if rel > 0:
+                if q_id not in ref_out:
+                    ref_out[q_id] = set()
+                ref_out[q_id].add(doc_id)
+    
+    #Populate the search_output
+    search_out = {}
+    with open(out_file, 'r') as f_out:
+        for cur_line in f_out:
+            toks = cur_line.strip().split()
+            assert len(toks) == 6
+            
+            q_id = toks[0]; doc_id = toks[2]; sim = float(toks[4]);
+            if q_id not in search_out:
+                search_out[q_id] = OrderedDict()
+            search_out[q_id][doc_id] = sim
+        
+        #For each query , sort the documents acc. to  similarity
+        for q in search_out:
+            search_out[q] = OrderedDict(sorted(search_out[q].items(), key = lambda x:x[1], reverse = True))
+        
+
+    #Count the number of documents
+    es = Elasticsearch()
+    r = es.search(index = es_index, body = {'size' : '0', 'query' : {}})
+    N_total = int(r['hits']['total'])
+    #print (N_total)
+   
+    #Define AQWV parameters
+    C = 0.0333
+    V = 1.0
+    P_relevant = 1.0/600
+    #Beta can be computed from the above quanties. But for CLIR, it is set to 20.0 
+    #IMP : Need to see the use of theta 
+    beta = 20.0
+    theta = 0.0
+    
+    #Compute AQWV scores for each query 
+    # IMP : For queries not present in both search_out and ref_out, AQWV is not computed
+    scores = {}
+    total_score = 0.0
+    total_count = 0
+    for qry in search_out:
+        if qry not in ref_out:
+            continue 
+        else:
+            ref_docs = ref_out[qry]
+            search_docs = search_out[qry].keys()
+            
+            N_miss = len(ref_docs - search_docs) 
+            N_FA = len(search_docs - ref_docs)
+            N_relevant = len(ref_docs)
+            
+            P_miss = N_miss * 1.0/N_relevant
+            P_FA = N_FA * 1.0/(N_total - N_relevant)
+
+            scores[qry] = 1.0 - (P_miss + beta * P_FA)
+            
+            total_score += scores[qry]
+            total_count +=1
+
+            #print (qry, N_miss, N_FA, N_relevant, P_miss, P_FA, scores[qry])
+    print ("FINAL AQWV is ", total_score/total_count)
+
+
 
 #Given a query file, it maps the query number to the query
 def get_queries(query_file):
@@ -78,7 +158,7 @@ def prec_recall_graph(output_path, FIN_OUT):
         plt.savefig(os.path.join(output_path,'P_r_graph_TREC.png'))
 
 
-def eval(query_file, ref_out_file, output_path, TREC_PATH, search):
+def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index):
     SEARCH_OUT = os.path.join(output_path, "search_output_trec.txt")
     f_out = open(SEARCH_OUT,'w')
     queries = get_queries(query_file)
@@ -98,6 +178,7 @@ def eval(query_file, ref_out_file, output_path, TREC_PATH, search):
     subprocess.call(['make'])
     os.chdir(my_cwd)
     
+    AQWV(ref_out_file, SEARCH_OUT, es_index)
     #Run trec-eval
     TREC_EXEC = os.path.join(TREC_PATH,'trec_eval')
     if not os.path.isfile(TREC_EXEC):
@@ -127,7 +208,8 @@ if __name__ == '__main__':
     if not (parser.has_option('Evaluation', 'search_script') or 
             parser.has_option('Evaluation', 'trec_eval_path') or
             parser.has_option('Evaluation', 'query_file') or
-            parser.has_option('Evaluation', 'reference_file')):
+            parser.has_option('Evaluation', 'reference_file') or
+            parser.has_option('Evaluation', 'index_name')):
         print ("Invalid/Incomplete Evaluation parameters in config file")
         sys.exit()
 
@@ -136,6 +218,7 @@ if __name__ == '__main__':
     query_file = parser.get('Evaluation', 'query_file')
     reference_file = parser.get('Evaluation', 'reference_file')
     output_path = parser.get('Evaluation', 'output_path')
+    es_index = parser.get('Evaluation', 'index_name')
     
     #Import search module
     search_dir, search_file = os.path.split(search_script)
@@ -148,4 +231,4 @@ if __name__ == '__main__':
         mod = importlib.import_module(search_file.replace('.py', ''))
         search_func = getattr(mod, 'search')   
     
-    eval(query_file, reference_file, output_path, TREC_PATH, search_func)
+    eval(query_file, reference_file, output_path, TREC_PATH, search_func, es_index)
