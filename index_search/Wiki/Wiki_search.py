@@ -8,11 +8,13 @@ import datetime
 import sys
 import json
 
-def search(keyWord):
+
+#Takes in a parameter num_results which limits the number of search responses
+def search(keyWord, num_results=5):
     es = Elasticsearch()
     #Removed Doc_type for Evaluation Metric
     #Also added size paramter as it defaults to 10
-    response = es.search(index="wiki_sw", body = { "size" : 5,   "query": {
+    response = es.search(index="wiki_sw", body = { "size" : num_results,   "query": {
     "bool": {
       "should": [
         { "match": { "content": keyWord } },
