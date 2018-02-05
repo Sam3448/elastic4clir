@@ -1,4 +1,5 @@
 import matplotlib
+
 matplotlib.use('Agg')
 import sys
 import os
@@ -12,10 +13,43 @@ import importlib
 from configparser import SafeConfigParser
 from collections import OrderedDict
 from elasticsearch import Elasticsearch
+import numpy as np
+
+# def computeROC(search_out,  ref_out, theta):
+#     total_score = 0.0
+#     total_count = 0
+#     total_miss = 0.0
+#     total_FA = 0.0
+# 
+#     for qry in search_out:
+#         if qry not in ref_out:
+#             continue 
+#         else:
+#             ref_docs = ref_out[qry]
+#             search_docs = search_out[qry].keys()
+#             search_docs = (tmp for tmp in search_docs and search_out[qry][tmp] > theta)
+#             N_miss = len(ref_docs - search_docs) 
+#             N_FA = len(search_docs - ref_docs)
+#             N_relevant = len(ref_docs)
+#             
+#             #Might be duplicates from above but computing the confusion matrix again for clarity
+#             TP = len((x for x in ref_docs and x in search_docs))
+#             FN = len((x for x in ref_docs and x not in search_docs))
+#             FP = len((x for x not in ref_docs and x in search_docs))
+#             TN = len((x for x not in ref_docs  and x ))
+#             P_miss = N_miss * 1.0/N_relevant
+#             P_FA = N_FA * 1.0/(N_total - N_relevant)
+# 
+#             scores[qry] = 1.0 - (P_miss + beta * P_FA)
+#             
+#             total_score += scores[qry]
+#             total_count +=1
+#             total_miss += P_miss
+#             total_FA += P_FA
 
 
 #Implements the AQWV metric
-def AQWV(ref_file, out_file, es_index):
+def AQWV(ref_file, out_file, es_index, docs_per_qry=100):
     
     #Populate the reference outputs
     ref_out = {}
@@ -43,8 +77,13 @@ def AQWV(ref_file, out_file, es_index):
             search_out[q_id][doc_id] = sim
         
         #For each query , sort the documents acc. to  similarity
+        #Prune it till it is docs_per_qry
         for q in search_out:
             search_out[q] = OrderedDict(sorted(search_out[q].items(), key = lambda x:x[1], reverse = True))
+
+            #Prune till docs_per_qry
+            if len(search_out[q]) > docs_per_qry :
+                search_out[q] = OrderedDict(list(search_out[q].items())[0:docs_per_qry])
         
 
     #Count the number of documents
@@ -67,6 +106,9 @@ def AQWV(ref_file, out_file, es_index):
     scores = {}
     total_score = 0.0
     total_count = 0
+    total_miss = 0.0
+    total_FA = 0.0
+
     for qry in search_out:
         if qry not in ref_out:
             continue 
@@ -85,9 +127,11 @@ def AQWV(ref_file, out_file, es_index):
             
             total_score += scores[qry]
             total_count +=1
+            total_miss += P_miss
+            total_FA += P_FA
 
             #print (qry, N_miss, N_FA, N_relevant, P_miss, P_FA, scores[qry])
-    print ("FINAL AQWV is ", total_score/total_count)
+    print ("For docs ", docs_per_qry, " AQWV is ", total_score/total_count, "P_Miss ", str(total_miss/total_count), " P_FA ", str(total_FA/total_count))
     
 
 #Given a query file, it maps the query number to the query
@@ -137,29 +181,82 @@ def prec_recall_graph(output_path, FIN_OUT):
         plt.savefig(os.path.join(output_path, "P-r-graph_wiki_swahili.png"))
 
 
-def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index):
+def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, results_per_query):
     #File to store search output
     SEARCH_OUT = os.path.join(output_path, "search_output_wiki_swahili.txt")
-    f_out = open(SEARCH_OUT,'w');
+    f_out = open(SEARCH_OUT,'w')
+ 
+    #File to store output for Neural_network
+    NN_IN = os.path.join(output_path, "nn_output_wiki_swahili.txt")
+    f_nn = open(NN_IN, 'w')
+    NN_q_d = []
+ 
     queries = get_queries(query_file)
-
+ 
     if queries is None or len(queries) == 0:
         print ("\nInvalid or Bad Query File. Exiting Evaluation module\n")
         sys.exit
+     
     for q_num in queries:
         q_string =  queries[q_num]
-        res = search(q_string)
+ 
+        #Replace tabs with spaces as tab is delimited for shota's code
+        q_string = q_string.replace('\t', ' ')
+ 
+        res = search(q_string, results_per_query)
         for each_doc in res['hits']['hits']:
             f_out.write(str(q_num) + " " + "1" + " " + each_doc['_id'] + " " + "-1" + " " + str(each_doc['_score']) + " " + "STANDARD" + "\n")
+ 
+            #Add query_id and doc_id to NN_q_d
+            NN_q_d.append((int(q_num), int(each_doc['_id'])))
+ 
+            #Add data to NN_out
+            f_nn.write('qid=' + str(q_num) + '\t' + \
+                        '-1' + '\t' + \
+                        q_string + '\t' + \
+                        each_doc['_source']['content'] + '\n')
+ 
     f_out.close()
-    
+    f_nn.close()
+ 
+    #Saving query_document mapping to expand the Neural_net output
+    np.save('q_d_num.npy', np.array(NN_q_d))
+ 
+     
+ 
+    print ("\nDone writing search_out and nn_out, running TREC_eval and AQWV\n")
+     
     #Compile (make) the trec-eval code
     my_cwd = os.getcwd()
     os.chdir(TREC_PATH)
     subprocess.call(['make'])
     os.chdir(my_cwd)
-    
+     
     AQWV(ref_out_file, SEARCH_OUT, es_index)
+ 
+    #Run it on Shota's output
+    NN_OUT = '/export/a10/CLIR/neural_CLIR/fin_nn_scores.txt'
+    AQWV(ref_out_file, NN_OUT, es_index, results_per_query)
+#     AQWV(ref_out_file, NN_OUT, es_index, 190)
+#     AQWV(ref_out_file, NN_OUT, es_index, 180)
+#     AQWV(ref_out_file, NN_OUT, es_index, 170)
+#     AQWV(ref_out_file, NN_OUT, es_index, 160)
+#     AQWV(ref_out_file, NN_OUT, es_index, 150)
+#     AQWV(ref_out_file, NN_OUT, es_index, 140)
+#     AQWV(ref_out_file, NN_OUT, es_index, 130)
+#     AQWV(ref_out_file, NN_OUT, es_index, 120)
+#     AQWV(ref_out_file, NN_OUT, es_index, 110)
+#     AQWV(ref_out_file, NN_OUT, es_index, 100)
+#     AQWV(ref_out_file, NN_OUT, es_index, 90)
+#     AQWV(ref_out_file, NN_OUT, es_index, 80)
+#     AQWV(ref_out_file, NN_OUT, es_index, 70)
+#     AQWV(ref_out_file, NN_OUT, es_index, 60)
+#     AQWV(ref_out_file, NN_OUT, es_index, 50)
+#     AQWV(ref_out_file, NN_OUT, es_index, 40)
+#     AQWV(ref_out_file, NN_OUT, es_index, 30)
+#     AQWV(ref_out_file, NN_OUT, es_index, 20)
+#     AQWV(ref_out_file, NN_OUT, es_index, 10)
+
     #Run trec-eval
     TREC_EXEC = os.path.join(TREC_PATH,'trec_eval')
     if not os.path.isfile(TREC_EXEC):
@@ -213,4 +310,6 @@ if __name__ == '__main__':
         mod = importlib.import_module(search_file.replace('.py', ''))
         search_func = getattr(mod, 'search')   
     
-    eval(query_file, reference_file, output_path, TREC_PATH, search_func, es_index)
+    #results_per_query determines number of search results to return per query
+    results_per_query=200
+    eval(query_file, reference_file, output_path, TREC_PATH, search_func, es_index, results_per_query)
