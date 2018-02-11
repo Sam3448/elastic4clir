@@ -8,12 +8,11 @@ import sys
 import json
 
 
-#Takes in a parameter num_results which limits the number of search responses
 def search(keyWord, num_results=5):
     es = Elasticsearch()
     #Removed Doc_type for Evaluation Metric
     #Also added size paramter as it defaults to 10
-    response = es.search(index="sw-en-analysis", body = { "size" : num_results,   "query": {
+    response = es.search(index="analysis1a", body = { "size" : num_results,   "query": {
     "bool": {
       "should": [
         { "match": { "content": keyWord } }
@@ -30,7 +29,7 @@ def search(keyWord, num_results=5):
     return response
 
 if __name__ == '__main__':
-    USAGE = "python 1A_search.py <query>"
+    USAGE = "python search.py <query>"
     if len(sys.argv) != 2:
         print (USAGE)
         sys.exit()
