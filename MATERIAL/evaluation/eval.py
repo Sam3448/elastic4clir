@@ -158,7 +158,7 @@ def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index):
         sys.exit
     for q_num in queries:
         q_string =  queries[q_num]
-        res = search(q_string)
+        res = search(es_index, q_string)
         if int(res['hits']['total']) == 0:
             f_out.write(str(q_num) + " " + "1 NO_HIT -1 1.0 STANDARD\n")
         for each_doc in res['hits']['hits']:
@@ -183,7 +183,7 @@ def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index):
     
 
 if __name__ == '__main__':
-    USAGE = '\nUSAGE : python 1A_eval.py <config-file> \n'
+    USAGE = '\nUSAGE : python eval.py <config-file> \n'
     
     if len(sys.argv) != 2:
         print (USAGE)
