@@ -9,24 +9,20 @@ import json
 import configparser
 
 
-def search(index_name, keyWord, num_results=5):
+def search(index_name, fieldName, keyWord, num_results=5):
     es = Elasticsearch()
-    #Removed Doc_type for Evaluation Metric
-    #Also added size paramter as it defaults to 10
-    response = es.search(index=index_name, body = { "size" : num_results,   "query": {
-    "bool": {
-      "should": [
-        { "match": { "content": keyWord } }
-      ]
-    }
-  },
-        "highlight" : {
-            "pre_tags" : ["<tag1>", "<tag2>"],
-            "post_tags" : ["</tag1>", "</tag2>"],
-            "fields" : {
-                "content" : {}
+
+    queryStr = '''{
+        "query": {
+            "query_string" : {
+                "default_field" : \"%s\",
+                "query" : \"%s\"
             }
-        }})
+        }
+    }'''%(fieldName, keyWord)
+
+    response = es.search(index=index_name, body = queryStr)
+
     return response
 
 if __name__ == '__main__':
@@ -39,9 +35,10 @@ if __name__ == '__main__':
     config = configparser.ConfigParser()
     config.read(configFile)
     
-    docIndex = config['Indexer']['index']
+    docIndex = config['Search']['index']
+    fieldName =config['Search']['system_id']
     qry = str(sys.argv[2])
-    res = search(docIndex, qry)
+    res = search(docIndex, fieldName, qry)
     
     for each_doc in res['hits']['hits']:
         print(each_doc['_id'], each_doc['_score'])
