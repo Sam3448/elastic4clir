@@ -12,12 +12,12 @@ configFile = str(sys.argv[1])
 config = configparser.ConfigParser()
 config.read(configFile)
 
-datadir = config['Indexer']['datadir']
-docIndex = config['Indexer']['index']
+datadir = config['Indexer']['datadir'].strip()
+docIndex = config['Indexer']['index'].strip()
 docType = 'doc'
-newField = config['Indexer']['system_id']
-index_analyzer = config['Indexer']['analyzer']
-search_analyzer = config['Indexer']['search_analyzer']
+newField = config['Indexer']['system_id'].strip()
+index_analyzer = config['Indexer']['analyzer'].strip()
+search_analyzer = config['Indexer']['search_analyzer'].strip()
 
 def index_document(es, doc_id, doc_text):
     status = ''

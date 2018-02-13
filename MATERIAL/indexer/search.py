@@ -12,14 +12,26 @@ import configparser
 def search(index_name, fieldName, keyWord, num_results=5):
     es = Elasticsearch()
 
+    fieldArr = []
+    if "," in fieldName:
+        fieldArr = fieldName.split(",")
+        for i in range(len(fieldArr)):
+            fieldArr[i] = fieldArr[i].strip()
+    else:
+        fieldArr.append(fieldName.strip())
+
+    queryField = "\",\"".join(fieldArr)
+
     queryStr = '''{
         "query": {
             "query_string" : {
-                "default_field" : \"%s\",
+                "fields" : [\"%s\"],
                 "query" : \"%s\"
             }
         }
-    }'''%(fieldName, keyWord)
+    }'''%(queryField, keyWord)
+
+    print(queryStr)
 
     response = es.search(index=index_name, body = queryStr)
 
