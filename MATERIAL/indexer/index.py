@@ -25,7 +25,7 @@ def index_document(es, doc_id, doc_text):
         es.index(index = docIndex, doc_type = docType, id = doc_id, body = {newField : doc_text})
         status='CREATING'
     else:
-        es.update(index = docIndex, doc_type = docType, id = doc_id, body = {"doc" : {newField : doc_text}})
+        es.update(index = docIndex, doc_type = docType, id = doc_id, body = {docType : {newField : doc_text}})
         status = 'UPDATING'
 
     return status
