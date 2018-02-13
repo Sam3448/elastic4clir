@@ -147,7 +147,7 @@ def prec_recall_graph(output_path, FIN_OUT):
         plt.savefig(os.path.join(output_path, "P-r-graph.png"))
 
 
-def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index):
+def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, system_id):
     #File to store search output
     SEARCH_OUT = os.path.join(output_path, "search_output.txt")
     f_out = open(SEARCH_OUT,'w');
@@ -158,28 +158,30 @@ def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index):
         sys.exit
     for q_num in queries:
         q_string =  queries[q_num]
-        res = search(es_index, q_string)
+        res = search(es_index, system_id, q_string) 
         if int(res['hits']['total']) == 0:
             f_out.write(str(q_num) + " " + "1 NO_HIT -1 1.0 STANDARD\n")
         for each_doc in res['hits']['hits']:
             f_out.write(str(q_num) + " " + "1" + " " + each_doc['_id'] + " " + "-1" + " " + str(each_doc['_score']) + " " + "STANDARD" + "\n")
+
     f_out.close()
         
     AQWV(ref_out_file, SEARCH_OUT, es_index)
-    #Run trec-eval
-    TREC_EXEC = os.path.join(TREC_PATH,'trec_eval')
-    if not os.path.isfile(TREC_EXEC):
-        print ("\nFailed to find ",TREC_EXEC)
-        sys.exit
     
-    #File to store final output
-    FIN_OUT = os.path.join(output_path, "results.txt")
-    fin_out = open(FIN_OUT, 'w')
-    print (subprocess.list2cmdline([TREC_EXEC, ref_out_file, SEARCH_OUT]))
-    subprocess.call([TREC_EXEC, ref_out_file, SEARCH_OUT], stdout = fin_out)
-    fin_out.close()
-    prec_recall_graph(output_path, FIN_OUT)
-    return FIN_OUT
+    #Run trec-eval
+    # TREC_EXEC = os.path.join(TREC_PATH,'trec_eval')
+    # if not os.path.isfile(TREC_EXEC):
+    #     print ("\nFailed to find ",TREC_EXEC)
+    #     sys.exit
+    
+    # #File to store final output
+    # FIN_OUT = os.path.join(output_path, "results.txt")
+    # fin_out = open(FIN_OUT, 'w')
+    # print (subprocess.list2cmdline([TREC_EXEC, ref_out_file, SEARCH_OUT]))
+    # subprocess.call([TREC_EXEC, ref_out_file, SEARCH_OUT], stdout = fin_out)
+    # fin_out.close()
+    # prec_recall_graph(output_path, FIN_OUT)
+    # return FIN_OUT
     
 
 if __name__ == '__main__':
@@ -195,7 +197,8 @@ if __name__ == '__main__':
     if not (parser.has_option('Evaluation', 'search_script') or 
             parser.has_option('Evaluation', 'trec_eval_path') or
             parser.has_option('Evaluation', 'query_file') or
-            parser.has_option('Evaluation', 'reference_file')or
+            parser.has_option('Evaluation', 'reference_file') or
+            parser.has_option('Evaluation', 'system_id') or
             parser.has_option("Indexer", 'index')):
         print ("Invalid/Incomplete Evaluation parameters in config file")
         sys.exit()
@@ -205,7 +208,9 @@ if __name__ == '__main__':
     query_file = parser.get('Evaluation', 'query_file')
     reference_file = parser.get('Evaluation', 'reference_file')
     output_path = parser.get('Evaluation', 'output_path')
+    system_id = parser.get('Evaluation', 'system_id')
     es_index = parser.get('Indexer', 'index')
+    
     
     #Import search module
     search_dir, search_file = os.path.split(search_script)
@@ -219,4 +224,4 @@ if __name__ == '__main__':
         mod = importlib.import_module(search_file.replace('.py', ''))
         search_func = getattr(mod, 'search')   
     
-    eval(query_file, reference_file, output_path, TREC_PATH, search_func, es_index)
+    eval(query_file, reference_file, output_path, TREC_PATH, search_func, es_index, system_id)

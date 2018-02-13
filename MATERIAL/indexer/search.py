@@ -31,8 +31,6 @@ def search(index_name, fieldName, keyWord, num_results=5):
         }
     }'''%(queryField, keyWord)
 
-    print(queryStr)
-
     response = es.search(index=index_name, body = queryStr)
 
     return response
