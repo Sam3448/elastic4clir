@@ -23,13 +23,14 @@ def search(index_name, fieldName, keyWord, num_results=5):
     queryField = "\",\"".join(fieldArr)
 
     queryStr = '''{
+        "size" : %s,
         "query": {
             "query_string" : {
                 "fields" : [\"%s\"],
                 "query" : \"%s\"
             }
         }
-    }'''%(queryField, keyWord)
+    }'''%(str(num_results), queryField, keyWord)
 
     response = es.search(index=index_name, body = queryStr)
 
