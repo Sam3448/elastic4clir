@@ -12,7 +12,8 @@ configFile = str(sys.argv[1])
 config = configparser.ConfigParser()
 config.read(configFile)
 
-datadir = config['Indexer']['datadir'].strip()
+#Supports multiple data-directories
+datadirs = [x.strip() for x in config['Indexer']['datadir'].split(',')]
 docIndex = config['Indexer']['index'].strip()
 docType = 'doc'
 newField = config['Indexer']['system_id'].strip()
@@ -77,18 +78,19 @@ print (es.indices.get_mapping(index = docIndex, doc_type = docType))
 
 totalcount = 0
 
-for filename in os.listdir(datadir):
-    if filename.startswith('MATERIAL'):
-        doc_id=filename.split('.')[0]
-        
-        #add it to <DatasetDocumentIDsFile>
-        f_datasetDocIDs.write(doc_id + '\n')
-        
-        doc_text = extract_text(datadir+"/"+filename)
-        status = index_document(es, doc_id, doc_text)
-        totalcount += 1
-        #print(doc_id,doc_text)
-        print("%s ==> current file Number : %s ; %d "%(status, doc_id, totalcount))
+for datadir in datadirs:
+    for filename in os.listdir(datadir):
+        if filename.startswith('MATERIAL'):
+            doc_id=filename.split('.')[0]
+            
+            #add it to <DatasetDocumentIDsFile>
+            f_datasetDocIDs.write(doc_id + '\n')
+            
+            doc_text = extract_text(datadir+"/"+filename)
+            status = index_document(es, doc_id, doc_text)
+            totalcount += 1
+            #print(doc_id,doc_text)
+            print("%s ==> current file Number : %s ; %d "%(status, doc_id, totalcount))
 
 f_datasetDocIDs.close()
 
