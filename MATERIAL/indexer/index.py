@@ -19,6 +19,16 @@ newField = config['Indexer']['system_id'].strip()
 index_analyzer = config['Indexer']['analyzer'].strip()
 search_analyzer = config['Indexer']['search_analyzer'].strip()
 
+#Used to store <DatasetDocumentIDsFile>
+dataset_name = docIndex + '-' + newField
+INDEX_OUTPUT_PATH = config['Indexer']['output_path']
+f_datasetDocIDs = open(os.path.join(INDEX_OUTPUT_PATH, dataset_name + '_CLIR_AllDocIDs.tsv'), 'w')
+f_datasetDocIDs.write(dataset_name + '\n')
+
+if not os.path.exists(INDEX_OUTPUT_PATH):
+    os.mkdir(INDEX_OUTPUT_PATH)
+
+
 def index_document(es, doc_id, doc_text):
     status = ''
     if not es.exists(index = docIndex, doc_type = docType, id = doc_id):
@@ -65,10 +75,15 @@ totalcount = 0
 for filename in os.listdir(datadir):
     if filename.startswith('MATERIAL'):
         doc_id=filename.split('.')[0]
+        
+        #add it to <DatasetDocumentIDsFile>
+        f_datasetDocIDs.write(doc_id + '\n')
+        
         doc_text = extract_text(datadir+"/"+filename)
         status = index_document(es, doc_id, doc_text)
         totalcount += 1
         #print(doc_id,doc_text)
         print("%s ==> current file Number : %s ; %d "%(status, doc_id, totalcount))
 
+f_datasetDocIDs.close()
 
