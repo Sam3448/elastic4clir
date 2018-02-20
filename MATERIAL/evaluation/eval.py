@@ -165,6 +165,32 @@ def normalize_scores(res):
     for each_doc in res['hits']['hits']:
         each_doc['_score'] = (float(each_doc['_score']) + min_score)/tot_score
 
+    
+def create_AnswerKeyFile(out_folder, dataset_name, ref_file, queries):
+    
+    #Create a sub-directory for Reference
+    out_folder = os.path.join(out_folder, 'Reference')
+    
+    if not os.path.exists(out_folder):
+        os.mkdir(out_folder)
+    
+    ref_out = {}
+    with open(ref_file, 'r') as f_ref:
+        for cur_line in f_ref:
+            toks = cur_line.strip().split()
+            assert len(toks) == 4
+            
+            q_id = toks[0]; doc_id = toks[2]; rel = int(toks[3])
+            if rel > 0:
+                if q_id not in ref_out:
+                    ref_out[q_id] = set()
+                ref_out[q_id].add(doc_id)
+    
+    for qry in ref_out:
+        with open(os.path.join(out_folder, dataset_name + 'q-' + qry + '.tsv'), 'w') as f_qry:
+            f_qry.write(qry + '\t' + queries[qry] + '\n')
+            for rel_docs in ref_out[qry]:
+                f_qry.write(rel_docs + '\n')
 
 def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, system_id):
     #Create output_path if it doesn't exist
@@ -181,6 +207,11 @@ def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, sys
 
     f_out = open(SEARCH_OUT,'w')
     queries = get_queries(query_file)
+
+    #Create <answerkeyfile>
+    dataset_name = es_index + '-' + system_id + '_CLIR_'
+    create_AnswerKeyFile(output_path, dataset_name, ref_out_file, queries)
+
 
     if queries is None or len(queries) == 0:
         print ("\nInvalid or Bad Query File. Exiting Evaluation module\n")
@@ -219,7 +250,7 @@ def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, sys
     # fin_out.close()
     # prec_recall_graph(output_path, FIN_OUT)
     # return FIN_OUT
-    
+
 
 if __name__ == '__main__':
     USAGE = '\nUSAGE : python eval.py <config-file> \n'
@@ -247,6 +278,7 @@ if __name__ == '__main__':
     output_path = parser.get('Evaluation', 'output_path')
     system_id = parser.get('Evaluation', 'system_id')
     es_index = parser.get('Indexer', 'index')
+    
     
     
     #Import search module
