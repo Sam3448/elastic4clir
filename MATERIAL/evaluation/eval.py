@@ -14,6 +14,8 @@ from collections import OrderedDict
 from elasticsearch import Elasticsearch
 import math
 
+#Hardcoding the path to official implementation of material scoring. Need to change in later
+MATERIAL_EVAL_PATH = '/export/a10/CLIR/tmp/MATERIAL_tools-0.4.2'
 
 #Implements the AQWV metric
 def AQWV(ref_file, out_file, es_index):
@@ -166,10 +168,10 @@ def normalize_scores(res):
         each_doc['_score'] = (float(each_doc['_score']) + min_score)/tot_score
 
     
-def create_AnswerKeyFile(out_folder, dataset_name, ref_file, queries):
+def create_AnswerKeyFile(base_out_folder, dataset_name, ref_file, queries):
     
     #Create a sub-directory for Reference
-    out_folder = os.path.join(out_folder, 'Reference')
+    out_folder = os.path.join(base_out_folder, 'Reference')
     
     if not os.path.exists(out_folder):
         os.mkdir(out_folder)
@@ -191,8 +193,31 @@ def create_AnswerKeyFile(out_folder, dataset_name, ref_file, queries):
             f_qry.write(qry + '\t' + queries[qry] + '\n')
             for rel_docs in ref_out[qry]:
                 f_qry.write(rel_docs + '\n')
+    
+    #Create subdirectory for generatedinputfiles
+    gen_out_folder = os.path.join(base_out_folder, 'GeneratedInputFiles')
+    if not os.path.exists(gen_out_folder):
+        os.mkdir(gen_out_folder)
+    
+    path_to_doc_file = os.path.join(base_out_folder, dataset_name + 'AllDocIDs.tsv')
+    path_to_query_files = os.path.join(base_out_folder, 'Queries')
+    path_to_ref_files = os.path.join(base_out_folder, 'Reference')
+    material_validator = os.path.join(MATERIAL_EVAL_PATH, 'material_validator.py')
 
-def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, system_id):
+    #Generate generatedinputfiles for each query in ref_out and in search out
+    #Default condition is query must be present in both ref and search
+    for qry in ref_out:
+        if qry in queries:
+            qry_file = os.path.join(path_to_query_files, 'q-' + qry + '.tsv')
+            ref_file = os.path.join(path_to_ref_files, dataset_name + 'q-' + qry + '.tsv')
+            gen_file = os.path.join(gen_out_folder, 'q-' + qry + '.ScoringReady.tsv')
+
+            command = material_validator + ' -s ' + qry_file + ' -d ' + path_to_doc_file + ' -r ' + ref_file + ' -g ' + gen_file
+            #print (command + '\n\n')
+
+
+
+def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, system_id, dataset_name):
     #Create output_path if it doesn't exist
     if not os.path.exists(output_path):
         os.mkdir(output_path)
@@ -208,8 +233,8 @@ def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, sys
     f_out = open(SEARCH_OUT,'w')
     queries = get_queries(query_file)
 
-    #Create <answerkeyfile>
-    dataset_name = es_index + '-' + system_id + '_CLIR_'
+    #Create <answerkeyfile> , default setting task to CLIR
+    dataset_name += '_CLIR_'
     create_AnswerKeyFile(output_path, dataset_name, ref_out_file, queries)
 
 
@@ -278,7 +303,7 @@ if __name__ == '__main__':
     output_path = parser.get('Evaluation', 'output_path')
     system_id = parser.get('Evaluation', 'system_id')
     es_index = parser.get('Indexer', 'index')
-    
+    dataset_name = parser.get('Indexer', 'dataset_name') 
     
     
     #Import search module
@@ -293,4 +318,4 @@ if __name__ == '__main__':
         mod = importlib.import_module(search_file.replace('.py', ''))
         search_func = getattr(mod, 'search')   
     
-    eval(query_file, reference_file, output_path, TREC_PATH, search_func, es_index, system_id)
+    eval(query_file, reference_file, output_path, TREC_PATH, search_func, es_index, system_id, dataset_name)
