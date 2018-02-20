@@ -12,6 +12,7 @@ import importlib
 from configparser import SafeConfigParser
 from collections import OrderedDict
 from elasticsearch import Elasticsearch
+import math
 
 
 #Implements the AQWV metric
@@ -146,23 +147,59 @@ def prec_recall_graph(output_path, FIN_OUT):
             )
         plt.savefig(os.path.join(output_path, "P-r-graph.png"))
 
+#Normalize the similarity scores such that they are between 0 and 1
+#Some times scores can be negative. So we add all scores by min and then normalize by sum
+def normalize_scores(res):
+    count = 0
+    min_score = float("inf")
+    tot_score = 0.0
+    
+    for each_doc in res['hits']['hits']:
+        each_score = float(each_doc['_score'])
+        count += 1
+        tot_score += each_score
+        if each_score < min_score:
+            min_score = each_score
+
+    tot_score += count * min_score
+    for each_doc in res['hits']['hits']:
+        each_doc['_score'] = (float(each_doc['_score']) + min_score)/tot_score
+
 
 def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, system_id):
+    #Create output_path if it doesn't exist
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
+    
     #File to store search output
     SEARCH_OUT = os.path.join(output_path, "search_output.txt")
-    f_out = open(SEARCH_OUT,'w');
+
+    #File to store <SystemOutputFiles> of every query
+    SYSTEM_OUT_FILES = os.path.join(output_path, "Queries")
+    if not os.path.exists(SYSTEM_OUT_FILES):
+        os.mkdir(SYSTEM_OUT_FILES)
+
+    f_out = open(SEARCH_OUT,'w')
     queries = get_queries(query_file)
 
     if queries is None or len(queries) == 0:
         print ("\nInvalid or Bad Query File. Exiting Evaluation module\n")
         sys.exit
-    for q_num in queries:
+    for q_num in queries:  
         q_string =  queries[q_num]
-        res = search(es_index, system_id, q_string) 
-        if int(res['hits']['total']) == 0:
-            f_out.write(str(q_num) + " " + "1 NO_HIT -1 1.0 STANDARD\n")
-        for each_doc in res['hits']['hits']:
-            f_out.write(str(q_num) + " " + "1" + " " + each_doc['_id'] + " " + "-1" + " " + str(each_doc['_score']) + " " + "STANDARD" + "\n")
+
+        #Create a query file for this qID
+        with open(os.path.join(SYSTEM_OUT_FILES, 'q-' + str(q_num) + '.tsv'), 'w') as f:
+            f.write(str(q_num) + '\t' + q_string + '\n')
+        
+            res = search(es_index, system_id, q_string) 
+            if int(res['hits']['total']) == 0:
+                f_out.write(str(q_num) + " " + "1 NO_HIT -1 1.0 STANDARD\n")
+            else:
+                normalize_scores(res)
+                for each_doc in res['hits']['hits']:
+                    f_out.write(str(q_num) + " " + "1" + " " + each_doc['_id'] + " " + "-1" + " " + str(each_doc['_score']) + " " + "STANDARD" + "\n")
+                    f.write(each_doc['_id'] + '\t' + "{0:.3f}".format(each_doc['_score']) + '\n')
 
     f_out.close()
         
