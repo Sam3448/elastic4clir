@@ -90,7 +90,7 @@ def AQWV(ref_file, out_file, es_index):
             total_count +=1
 
             #print (qry, N_miss, N_FA, N_relevant, P_miss, P_FA, scores[qry])
-    print ("FINAL AQWV is ", total_score/total_count)
+    print ("Our AQWV is ", total_score/total_count)
     
 
 
@@ -198,12 +198,20 @@ def create_AnswerKeyFile(base_out_folder, dataset_name, ref_file, queries):
     gen_out_folder = os.path.join(base_out_folder, 'GeneratedInputFiles')
     if not os.path.exists(gen_out_folder):
         os.mkdir(gen_out_folder)
+
+    #Create a subdirectory for scoredQWV files
+    score_out_folder = os.path.join(base_out_folder, 'QueryScores')
+    if not os.path.exists(score_out_folder):
+        os.mkdir(score_out_folder)
     
     path_to_doc_file = os.path.join(base_out_folder, dataset_name + 'AllDocIDs.tsv')
     path_to_query_files = os.path.join(base_out_folder, 'Queries')
     path_to_ref_files = os.path.join(base_out_folder, 'Reference')
     material_validator = os.path.join(MATERIAL_EVAL_PATH, 'material_validator.py')
+    material_scorer = os.path.join(MATERIAL_EVAL_PATH, 'material_scorer.py')
 
+    print ('Calling Material Validator to create <GeneratedInputFiles>...')
+    print ('Calling Material scorer to create QWV score for each query...')
     #Generate generatedinputfiles for each query in ref_out and in search out
     #Default condition is query must be present in both ref and search
     for qry in ref_out:
@@ -211,9 +219,21 @@ def create_AnswerKeyFile(base_out_folder, dataset_name, ref_file, queries):
             qry_file = os.path.join(path_to_query_files, 'q-' + qry + '.tsv')
             ref_file = os.path.join(path_to_ref_files, dataset_name + 'q-' + qry + '.tsv')
             gen_file = os.path.join(gen_out_folder, 'q-' + qry + '.ScoringReady.tsv')
+            score_file = os.path.join(score_out_folder, 'q-' + qry + '.AQWVscores.tsv')
 
-            command = material_validator + ' -s ' + qry_file + ' -d ' + path_to_doc_file + ' -r ' + ref_file + ' -g ' + gen_file
-            #print (command + '\n\n')
+            val_command = material_validator + ' -s ' + qry_file + ' -d ' + path_to_doc_file + ' -r ' + ref_file + ' -g ' + gen_file
+            
+            #Add beta for customization
+            score_command = material_scorer + ' -g ' + gen_file + ' -w ' + score_file            
+            subprocess.call(val_command, shell=True)            
+            
+            subprocess.call(score_command, shell=True)
+    
+    #Generate final AQWV score
+    fin_score_command = material_scorer + ' -m ' + score_out_folder + ' -w ' + os.path.join(base_out_folder, 'FinalAWQVscore.txt')
+    print ('Calculating global AQWV score ..')
+    subprocess.call(fin_score_command, shell=True)
+    print ('FINISHED! Official AQWV score at ' + os.path.join(base_out_folder, 'FinalAWQVscore.txt') )
 
 
 
