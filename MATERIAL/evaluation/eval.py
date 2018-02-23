@@ -12,13 +12,110 @@ import importlib
 from configparser import SafeConfigParser
 from collections import OrderedDict
 from elasticsearch import Elasticsearch
+import matplotlib.pyplot as plt
 import math
 
 #Hardcoding the path to official implementation of material scoring. Need to change in later
 MATERIAL_EVAL_PATH = '/export/a10/CLIR/tmp/MATERIAL_tools-0.4.2'
 
+#Checks all possible max_hits and finds the best AQWV overall
+def best_score(ref_out, search_out, beta, max_hits, N_total, out_path):
+    #Upper bound max_hits to num docs  indexed
+    max_hits = min(max_hits, N_total)
+    
+    print ("Running AQWV between max_hits of", str(0), "to", str(max_hits))
+    #This is the worst possible score
+    best_AQWV = -beta
+    best_hits = 0
+    
+    #(Debug) For drawing a graph
+    hits = []
+    AQWV_scores = []
+    
+    for cur_hits in range(0, max_hits+1):
+        scores = {}
+        total_score = 0.0
+        total_count = 0
+        
+        # IMP : For queries not present in both search_out and ref_out, AQWV is not computed
+        for qry in search_out:
+            if qry not in ref_out:
+                continue 
+            else:
+                ref_docs = ref_out[qry]
+                search_docs = set( list( search_out[qry].keys() )[0:cur_hits+1] )
+                
+                N_miss = len(ref_docs - search_docs) 
+                N_FA = len(search_docs - ref_docs)
+                N_relevant = len(ref_docs)
+                
+                P_miss = N_miss * 1.0/N_relevant
+                P_FA = N_FA * 1.0/(N_total - N_relevant)
+    
+                scores[qry] = 1.0 - (P_miss + beta * P_FA)
+                
+                total_score += scores[qry]
+                total_count +=1
+    
+        cur_AQWV = total_score/total_count
+        
+        
+        AQWV_scores.append(cur_AQWV)
+        hits.append(cur_hits)
+        
+        if cur_AQWV > best_AQWV:
+            best_AQWV = cur_AQWV
+            best_hits = cur_hits
+    
+    #Create  a graph for debug purposes
+    plt.plot(hits, AQWV_scores)
+    plt.xlabel("max_hits"); plt.ylabel("AQWV score")
+    plt.savefig(os.path.join(out_path, 'AQWV_trend.png'))
+    
+    return best_AQWV, best_hits
+
+#Checks all possible max_hits and finds the best AQWV PER QUERY
+def best_score_per_qry(ref_out, search_out, beta, max_hits, N_total, out_path):
+    
+    #Upper bound max_hits to num docs  indexed
+    max_hits = min(max_hits, N_total)
+    scores = {}
+    total_score = 0.0
+    total_count = 0
+            
+    # IMP : For queries not present in both search_out and ref_out, AQWV is not computed
+    for qry in search_out:
+        if qry not in ref_out:
+            continue 
+        else:
+            best_AQWV = -beta
+            for cur_hits in range(0, max_hits+1):
+                
+                ref_docs = ref_out[qry]
+                search_docs = set( list( search_out[qry].keys() )[0:cur_hits+1] )
+                
+                N_miss = len(ref_docs - search_docs) 
+                N_FA = len(search_docs - ref_docs)
+                N_relevant = len(ref_docs)
+                
+                P_miss = N_miss * 1.0/N_relevant
+                P_FA = N_FA * 1.0/(N_total - N_relevant)
+    
+                scores[qry] = 1.0 - (P_miss + beta * P_FA)
+                if scores[qry] > best_AQWV:
+                    best_AQWV = scores[qry]
+                
+            total_score += best_AQWV
+            total_count +=1
+    
+    cur_AQWV = total_score/total_count
+        
+    return cur_AQWV
+
+
+
 #Implements the AQWV metric
-def AQWV(ref_file, out_file, es_index):
+def AQWV(ref_file, out_file, es_index, max_hits):
     
     #Populate the reference outputs
     ref_out = {}
@@ -65,17 +162,22 @@ def AQWV(ref_file, out_file, es_index):
     beta = 20.0
     theta = 0.0
     
-    #Compute AQWV scores for each query 
-    # IMP : For queries not present in both search_out and ref_out, AQWV is not computed
+    #score, hits = best_score(ref_out, search_out, beta, max_hits, N_total, os.path.split(out_file)[0])
+    score = best_score_per_qry(ref_out, search_out, beta, max_hits, N_total, os.path.split(out_file)[0])
+    print ("Oracle QWV of", str(score))    
+    
+    #Computing AQWV for given max-hits
     scores = {}
     total_score = 0.0
     total_count = 0
+    
+    # IMP : For queries not present in both search_out and ref_out, AQWV is not computed
     for qry in search_out:
         if qry not in ref_out:
             continue 
         else:
             ref_docs = ref_out[qry]
-            search_docs = search_out[qry].keys()
+            search_docs = ( search_out[qry].keys() )
             
             N_miss = len(ref_docs - search_docs) 
             N_FA = len(search_docs - ref_docs)
@@ -89,10 +191,9 @@ def AQWV(ref_file, out_file, es_index):
             total_score += scores[qry]
             total_count +=1
 
-            #print (qry, N_miss, N_FA, N_relevant, P_miss, P_FA, scores[qry])
-    print ("Our AQWV is ", total_score/total_count)
+    cur_AQWV = total_score/total_count
+    print ("AQWV for max_hits of ", str(max_hits),"is", str(cur_AQWV))
     
-
 
 def parse_query(query_string):
     '''very basic query parser'''
@@ -205,7 +306,7 @@ def create_AnswerKeyFile(base_out_folder, dataset_name, ref_file, queries):
         os.mkdir(score_out_folder)
     
     path_to_doc_file = os.path.join(base_out_folder, dataset_name + 'AllDocIDs.tsv')
-    path_to_query_files = os.path.join(base_out_folder, 'Queries')
+    path_to_query_files = os.path.join(base_out_folder, 'SystemOutputFiles')
     path_to_ref_files = os.path.join(base_out_folder, 'Reference')
     material_validator = os.path.join(MATERIAL_EVAL_PATH, 'material_validator.py')
     material_scorer = os.path.join(MATERIAL_EVAL_PATH, 'material_scorer.py')
@@ -237,7 +338,7 @@ def create_AnswerKeyFile(base_out_folder, dataset_name, ref_file, queries):
 
 
 
-def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, system_id, dataset_name):
+def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, system_id, dataset_name, max_hits):
     #Create output_path if it doesn't exist
     if not os.path.exists(output_path):
         os.mkdir(output_path)
@@ -246,17 +347,12 @@ def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, sys
     SEARCH_OUT = os.path.join(output_path, "search_output.txt")
 
     #File to store <SystemOutputFiles> of every query
-    SYSTEM_OUT_FILES = os.path.join(output_path, "Queries")
+    SYSTEM_OUT_FILES = os.path.join(output_path, "SystemOutputFiles")
     if not os.path.exists(SYSTEM_OUT_FILES):
         os.mkdir(SYSTEM_OUT_FILES)
 
     f_out = open(SEARCH_OUT,'w')
     queries = get_queries(query_file)
-
-    #Create <answerkeyfile> , default setting task to CLIR
-    dataset_name += '_CLIR_'
-    create_AnswerKeyFile(output_path, dataset_name, ref_out_file, queries)
-
 
     if queries is None or len(queries) == 0:
         print ("\nInvalid or Bad Query File. Exiting Evaluation module\n")
@@ -268,7 +364,7 @@ def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, sys
         with open(os.path.join(SYSTEM_OUT_FILES, 'q-' + str(q_num) + '.tsv'), 'w') as f:
             f.write(str(q_num) + '\t' + q_string + '\n')
         
-            res = search(es_index, system_id, q_string) 
+            res = search(es_index, system_id, q_string, max_hits) 
             if int(res['hits']['total']) == 0:
                 f_out.write(str(q_num) + " " + "1 NO_HIT -1 1.0 STANDARD\n")
             else:
@@ -277,9 +373,16 @@ def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, sys
                     f_out.write(str(q_num) + " " + "1" + " " + each_doc['_id'] + " " + "-1" + " " + str(each_doc['_score']) + " " + "STANDARD" + "\n")
                     f.write(each_doc['_id'] + '\t' + "{0:.3f}".format(each_doc['_score']) + '\n')
 
+    
+    #Create <answerkeyfile> , default setting task to CLIR
+    dataset_name += '_CLIR_'
+    create_AnswerKeyFile(output_path, dataset_name, ref_out_file, queries)
+
+
+    
     f_out.close()
         
-    AQWV(ref_out_file, SEARCH_OUT, es_index)
+    AQWV(ref_out_file, SEARCH_OUT, es_index, max_hits)
     
     #Run trec-eval
     # TREC_EXEC = os.path.join(TREC_PATH,'trec_eval')
@@ -323,7 +426,8 @@ if __name__ == '__main__':
     output_path = parser.get('Evaluation', 'output_path')
     system_id = parser.get('Evaluation', 'system_id')
     es_index = parser.get('Indexer', 'index')
-    dataset_name = parser.get('Indexer', 'dataset_name') 
+    dataset_name = parser.get('Indexer', 'dataset_name')
+    max_hits = int(parser.get('Evaluation', 'max_hits'))
     
     
     #Import search module
@@ -338,4 +442,4 @@ if __name__ == '__main__':
         mod = importlib.import_module(search_file.replace('.py', ''))
         search_func = getattr(mod, 'search')   
     
-    eval(query_file, reference_file, output_path, TREC_PATH, search_func, es_index, system_id, dataset_name)
+    eval(query_file, reference_file, output_path, TREC_PATH, search_func, es_index, system_id, dataset_name, max_hits)
