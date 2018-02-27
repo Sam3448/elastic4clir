@@ -206,18 +206,23 @@ def parse_query(query_string):
     return q
     
 #Given a query file, it maps the query number to the query
+domain_id2name = {
+    'GOV':'Government-And-Politics',
+    'LIF':'Lifestyle'
+}
+
 def get_queries(query_file):
     if not os.path.isfile(query_file) or os.stat(query_file).st_size == 0:
         return None
     
     query_dict = {}
-    
     with open(query_file, 'r') as f:
         f.readline()
         for idx,cur_line in enumerate(f):
-            query_id, query_string, domain_id, = cur_line.split('\t')[0:3]
-            query_dict[query_id] = parse_query(query_string)
-            #query_dict[int(toks[0])] = toks[1]
+            query_id, query_string, domain_id, = cur_line.rstrip().split('\t')[0:3]
+            query_dict[query_id] = {}
+            query_dict[query_id]['parsed'] = parse_query(query_string)
+            query_dict[query_id]['original'] = query_string + ":" + domain_id2name[domain_id]
             
     return query_dict
 
@@ -291,7 +296,7 @@ def create_AnswerKeyFile(base_out_folder, dataset_name, ref_file, queries):
     
     for qry in ref_out:
         with open(os.path.join(out_folder, dataset_name + 'q-' + qry + '.tsv'), 'w') as f_qry:
-            f_qry.write(qry + '\t' + queries[qry] + '\n')
+            f_qry.write(qry + '\t' + queries[qry]['original'] + '\n')
             for rel_docs in ref_out[qry]:
                 f_qry.write(rel_docs + '\n')
     
@@ -358,11 +363,11 @@ def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, sys
         print ("\nInvalid or Bad Query File. Exiting Evaluation module\n")
         sys.exit
     for q_num in queries:  
-        q_string =  queries[q_num]
+        q_string =  queries[q_num]['parsed']
 
         #Create a query file for this qID
         with open(os.path.join(SYSTEM_OUT_FILES, 'q-' + str(q_num) + '.tsv'), 'w') as f:
-            f.write(str(q_num) + '\t' + q_string + '\n')
+            f.write(str(q_num) + '\t' + queries[q_num]['original'] + '\n')
         
             res = search(es_index, system_id, q_string, max_hits) 
             if int(res['hits']['total']) == 0:
