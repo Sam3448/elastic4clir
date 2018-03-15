@@ -2,6 +2,16 @@
 ElasticSearch package for Cross-lingual Information Retrieval
 
 ## Installation & Setup
+
+To setup the conda environment:
+
+   conda env create -f conda-clir-env.yml
+   source activate clir
+
+
+
+##
+
 Under this directory:
 
 * index_research: all scripts for indexing and searching. Right now two datasets are included: TREC and CACM.

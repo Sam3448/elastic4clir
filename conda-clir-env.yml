@@ -1,0 +1,36 @@
+name: clir
+channels:
+- defaults
+dependencies:
+- ca-certificates=2017.08.26=h1d4fec5_0
+- libgcc-ng=7.2.0=h7cc24e2_2
+- openssl=1.0.2l=h077ae2c_5
+- pip=9.0.1=py34_1
+- python=3.4.5=0
+- readline=6.2=2
+- setuptools=27.2.0=py34_0
+- sqlite=3.13.0=0
+- tk=8.5.18=0
+- wheel=0.29.0=py34_0
+- xz=5.2.3=h2bcbf08_1
+- zlib=1.2.11=hfbfcf68_1
+- pip:
+  - beautifulsoup4==4.6.0
+  - bs4==0.0.1
+  - certifi==2017.7.27.1
+  - chardet==3.0.4
+  - cycler==0.10.0
+  - elasticsearch==5.4.0
+  - idna==2.6
+  - lxml==4.1.0
+  - matplotlib==2.1.0
+  - nltk==3.2.5
+  - numpy==1.13.3
+  - pyparsing==2.2.0
+  - python-dateutil==2.6.1
+  - pytz==2017.2
+  - requests==2.18.4
+  - six==1.11.0
+  - urllib3==1.22
+
+
