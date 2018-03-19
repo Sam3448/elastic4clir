@@ -8,7 +8,7 @@ To setup the conda environment:
    conda env create -f conda-clir-env.yml
    source activate clir
 
-
+This version of elastic4clir is based on elasticsearch-5.6.3. Download this from: https://www.elastic.co/downloads/past-releases and start up ElasticSearch before running the indexing/evaluation scripts. 
 
 ##
 
