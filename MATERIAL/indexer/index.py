@@ -20,20 +20,6 @@ newField = config['Indexer']['system_id'].strip()
 index_analyzer = config['Indexer']['analyzer'].strip()
 search_analyzer = config['Indexer']['search_analyzer'].strip()
 
-#Used to store <DatasetDocumentIDsFile>
-dataset_name = config['Indexer']['dataset_name'].strip()
-
-INDEX_OUTPUT_PATH = config['Indexer']['output_path']
-
-if not os.path.exists(INDEX_OUTPUT_PATH):
-    os.mkdir(INDEX_OUTPUT_PATH)
-
-f_datasetDocIDs = open(os.path.join(INDEX_OUTPUT_PATH, dataset_name + '_CLIR_AllDocIDs.tsv'), 'w')
-f_datasetDocIDs.write(dataset_name + '\n')
-
-if not os.path.exists(INDEX_OUTPUT_PATH):
-    os.mkdir(INDEX_OUTPUT_PATH)
-
 
 def index_document(es, doc_id, doc_text):
     status = ''

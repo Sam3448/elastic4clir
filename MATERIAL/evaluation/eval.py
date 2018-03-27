@@ -348,6 +348,14 @@ def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, sys
     if not os.path.exists(output_path):
         os.mkdir(output_path)
     
+    #Generate list of documents (for NIST script)
+    with open(os.path.join(output_path, dataset_name + '_CLIR_AllDocIDs.tsv'), 'w') as f_datasetDocIDs:
+        f_datasetDocIDs.write(dataset_name + '\n')
+        es = Elasticsearch()
+        r = es.search(index = es_index, body = {'query': {'match_all': {}}}, filter_path=['hits.hits._id'], size = 10000)
+        for d in r['hits']['hits']:
+            f_datasetDocIDs.write(d['_id'] + '\n')
+    
     #File to store search output
     SEARCH_OUT = os.path.join(output_path, "search_output.txt")
 
