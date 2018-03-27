@@ -1,14 +1,42 @@
 # elastic4clir
-ElasticSearch package for Cross-lingual Information Retrieval
+An ElasticSearch package for Cross-Lingual Information Retrieval
 
-## Installation & Setup
+The goal of *elastic4clir* is to provide a flexible framework for running cross-lingual information retrieval (CLIR) experiments. It implements various retrieval techniques and benchmarks while using ElasticSearch/Lucene as the backend index and search components.
 
-To setup the conda environment:
 
+## Installation
+
+First, clone this repo, and setup your conda environment:
+
+   ```bash
+   cd ~/your-working-directory
+   git clone (this repo)
+   cd elastic4clir
    conda env create -f conda-clir-env.yml
    source activate clir
+   ```
 
-This version of elastic4clir is based on elasticsearch-5.6.3. Download this from: https://www.elastic.co/downloads/past-releases and start up ElasticSearch before running the indexing/evaluation scripts. 
+Second, you need to get ElasticSearch separately. This version of elastic4clir is based on elasticsearch-5.6.3. Various version can be downloaded from: https://www.elastic.co/downloads/past-releases
+
+   ```bash
+   wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.6.3.tar.gz
+   gunzip elasticsearch-5.6.3.tar
+   tar -xvf elasticsearch-5.6.3.tar
+   ```
+
+That's it! To start the ElasticSearch server as a daemon,
+
+   ```bash
+   ./elasticsearch-5.6.3/bin/elasticsearch -d
+   ```
+
+To stop the ElasticSearch server,
+
+   ```bash
+   jps | grep Elasticsearch
+   ```
+
+Then kill the process with the PID. Note that the indices persist in the data directory of elasticsearch. To clean-up, you can just delete the directory. 
 
 ##
 
