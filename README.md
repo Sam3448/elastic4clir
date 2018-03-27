@@ -6,17 +6,24 @@ The goal of *elastic4clir* is to provide a flexible framework for running cross-
 
 ## Installation
 
-First, clone this repo, and setup your conda environment:
+It's assumed that you have Anaconda installed. If not, download and setup your conda path:
+
+   ```bash
+   wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh
+   bash Miniconda2-latest-Linux-x86_64.sh
+   export PATH=$HOME/miniconda2/bin:$PATH
+   ```
+
+Now, clone this repo, and create a conda environment that contains the dependencies for this package:
 
    ```bash
    cd ~/your-working-directory
    git clone (this repo)
    cd elastic4clir
    conda env create -f conda-clir-env.yml
-   source activate clir
    ```
 
-Second, you need to get ElasticSearch separately. This version of elastic4clir is based on elasticsearch-5.6.3. Various version can be downloaded from: https://www.elastic.co/downloads/past-releases
+Also, you need to get ElasticSearch separately. This version of elastic4clir is based on elasticsearch-5.6.3. Various version can be downloaded from: https://www.elastic.co/downloads/past-releases
 
    ```bash
    wget https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.6.3.tar.gz
