@@ -46,8 +46,8 @@ if __name__ == '__main__':
     config = configparser.ConfigParser()
     config.read(configFile)
     
-    docIndex = config['Search']['index']
-    fieldName =config['Search']['system_id']
+    docIndex = config['Indexer']['index']
+    fieldName =config['Indexer']['system_id']
     qry = str(sys.argv[2])
     res = search(docIndex, fieldName, qry)
     

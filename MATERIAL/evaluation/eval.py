@@ -427,7 +427,7 @@ if __name__ == '__main__':
             parser.has_option('Evaluation', 'trec_eval_path') or
             parser.has_option('Evaluation', 'query_file') or
             parser.has_option('Evaluation', 'reference_file') or
-            parser.has_option('Evaluation', 'system_id') or
+            parser.has_option('Indexer', 'system_id') or
             parser.has_option("Indexer", 'index')):
         print ("Invalid/Incomplete Evaluation parameters in config file")
         sys.exit()
@@ -437,7 +437,7 @@ if __name__ == '__main__':
     query_file = parser.get('Evaluation', 'query_file')
     reference_file = parser.get('Evaluation', 'reference_file')
     output_path = parser.get('Evaluation', 'output_path')
-    system_id = parser.get('Evaluation', 'system_id')
+    system_id = parser.get('Indexer', 'system_id')
     es_index = parser.get('Indexer', 'index')
     dataset_name = parser.get('Indexer', 'dataset_name')
     max_hits = int(parser.get('Evaluation', 'max_hits'))
