@@ -1,22 +1,25 @@
-import matplotlib
-matplotlib.use('Agg')
 import sys
 import os
 import re
 import subprocess
 import collections
-import matplotlib.pyplot as plt
 from bs4 import BeautifulSoup
 import json
 import importlib
 from configparser import SafeConfigParser
 from collections import OrderedDict
 from elasticsearch import Elasticsearch
-import matplotlib.pyplot as plt
 import math
 
 #Hardcoding the path to official implementation of material scoring. Need to change in later
 MATERIAL_EVAL_PATH = '/export/a10/CLIR/tmp/MATERIAL_tools-0.4.2'
+
+#Hardcoding the conversation of domain names needed for the official NIST script
+#Given a query file, it maps the query number to the query
+domain_id2name = {
+    'GOV':'Government-And-Politics',
+    'LIF':'Lifestyle'
+}
 
 #Checks all possible max_hits and finds the best AQWV overall
 def best_score(ref_out, search_out, beta, max_hits, N_total, out_path):
@@ -66,12 +69,7 @@ def best_score(ref_out, search_out, beta, max_hits, N_total, out_path):
         if cur_AQWV > best_AQWV:
             best_AQWV = cur_AQWV
             best_hits = cur_hits
-    
-    #Create  a graph for debug purposes
-    plt.plot(hits, AQWV_scores)
-    plt.xlabel("max_hits"); plt.ylabel("AQWV score")
-    plt.savefig(os.path.join(out_path, 'AQWV_trend.png'))
-    
+        
     return best_AQWV, best_hits
 
 #Checks all possible max_hits and finds the best AQWV PER QUERY
@@ -115,7 +113,7 @@ def best_score_per_qry(ref_out, search_out, beta, max_hits, N_total, out_path):
 
 
 #Implements the AQWV metric
-def AQWV(ref_file, out_file, es_index, max_hits):
+def compute_AQWV(ref_file, out_file, N_total, max_hits):
     
     #Populate the reference outputs
     ref_out = {}
@@ -146,12 +144,6 @@ def AQWV(ref_file, out_file, es_index, max_hits):
         for q in search_out:
             search_out[q] = OrderedDict(sorted(search_out[q].items(), key = lambda x:x[1], reverse = True))
         
-
-    #Count the number of documents
-    es = Elasticsearch()
-    r = es.search(index = es_index, body = {'size' : '0', 'query' : {}})
-    N_total = int(r['hits']['total'])
-    #print (N_total)
    
     #Define AQWV parameters
     C = 0.0333
@@ -164,8 +156,8 @@ def AQWV(ref_file, out_file, es_index, max_hits):
     
     #score, hits = best_score(ref_out, search_out, beta, max_hits, N_total, os.path.split(out_file)[0])
     score = best_score_per_qry(ref_out, search_out, beta, max_hits, N_total, os.path.split(out_file)[0])
-    print ("Oracle QWV of", str(score))    
-    
+    print("Oracle QWV:          \t %.4f" %score)
+
     #Computing AQWV for given max-hits
     scores = {}
     total_score = 0.0
@@ -192,9 +184,10 @@ def AQWV(ref_file, out_file, es_index, max_hits):
             total_count +=1
 
     cur_AQWV = total_score/total_count
-    print ("AQWV for max_hits of ", str(max_hits),"is", str(cur_AQWV))
-    
+    print("AQWV for max_hits=%d: \t %.4f" %(max_hits, cur_AQWV))
+    print("#queries evaluated:   \t %d" %total_count)
 
+    
 def parse_query(query_string):
     '''very basic query parser'''
     conjunction = query_string.split(',')
@@ -205,11 +198,6 @@ def parse_query(query_string):
         q+= c3 + " "
     return q
     
-#Given a query file, it maps the query number to the query
-domain_id2name = {
-    'GOV':'Government-And-Politics',
-    'LIF':'Lifestyle'
-}
 
 def get_queries(query_file):
     if not os.path.isfile(query_file) or os.stat(query_file).st_size == 0:
@@ -226,34 +214,6 @@ def get_queries(query_file):
             
     return query_dict
 
-#Runs evaluation given queries, gold output and our output.
-#Returns the path to result file
-
-def prec_recall_graph(output_path, FIN_OUT):
-    with open(FIN_OUT , 'r') as f:
-        MAP = 0
-        prec = [0]*11
-        idx = 0
-        for line in f:
-            toks = line.strip().split()
-            if len(toks) == 3:
-                if toks[0] == 'map':
-                    MAP = float(toks[2])
-                if 'iprec_at_recall_' in toks[0]:
-                    prec[idx] = float(toks[2])
-                    idx += 1
-        assert idx == 11
-        #print(MAP)
-        #print (prec)
-        plt.plot([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], prec)
-        plt.plot([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0], [MAP]*11)
-        plt.ylabel("Precison")
-        plt.xlabel("Recall")
-        plt.title("Precison-Recall Curve")
-        plt.annotate('Mean Average Precision\n(MAP) = '+ str(MAP), xy=(0.4, MAP), xytext=(0.6, max(prec)/3),\
-            arrowprops=dict(facecolor='black', shrink=0.05),\
-            )
-        plt.savefig(os.path.join(output_path, "P-r-graph.png"))
 
 #Normalize the similarity scores such that they are between 0 and 1
 #Some times scores can be negative. So we add all scores by min and then normalize by sum
@@ -273,9 +233,21 @@ def normalize_scores(res):
     for each_doc in res['hits']['hits']:
         each_doc['_score'] = (float(each_doc['_score']) + min_score)/tot_score
 
-    
-def create_AnswerKeyFile(base_out_folder, dataset_name, ref_file, queries):
-    
+
+
+def create_DocumentList(output_path, dataset_name, es_index):
+    #Generate list of documents (for NIST script)
+    with open(os.path.join(output_path, dataset_name + '_CLIR_AllDocIDs.tsv'), 'w') as f_datasetDocIDs:
+        f_datasetDocIDs.write(dataset_name + '\n')
+        es = Elasticsearch()
+        r = es.search(index = es_index, body = {'query': {'match_all': {}}}, filter_path=['hits.hits._id'], size = 10000)
+        for d in r['hits']['hits']:
+            f_datasetDocIDs.write(d['_id'] + '\n')
+
+            
+def compute_AQWV_official(base_out_folder, dataset_name, ref_file, queries):
+    '''Compute AQWV using the official NIST scripts'''
+
     #Create a sub-directory for Reference
     out_folder = os.path.join(base_out_folder, 'Reference')
     
@@ -316,8 +288,10 @@ def create_AnswerKeyFile(base_out_folder, dataset_name, ref_file, queries):
     material_validator = os.path.join(MATERIAL_EVAL_PATH, 'material_validator.py')
     material_scorer = os.path.join(MATERIAL_EVAL_PATH, 'material_scorer.py')
 
-    print ('Calling Material Validator to create <GeneratedInputFiles>...')
-    print ('Calling Material scorer to create QWV score for each query...')
+    if verbose >= 1:
+        print ('Calling Material Validator to create <GeneratedInputFiles>...')
+        print ('Calling Material scorer to create QWV score for each query...')
+
     #Generate generatedinputfiles for each query in ref_out and in search out
     #Default condition is query must be present in both ref and search
     for qry in ref_out:
@@ -331,40 +305,41 @@ def create_AnswerKeyFile(base_out_folder, dataset_name, ref_file, queries):
             
             #Add beta for customization
             score_command = material_scorer + ' -g ' + gen_file + ' -w ' + score_file            
-            subprocess.call(val_command, shell=True)            
-            
-            subprocess.call(score_command, shell=True)
+            subprocess.call(val_command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)     
+            subprocess.call(score_command, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
     #Generate final AQWV score
+    if verbose >= 1:
+        print ('Calculating Official AQWV score ..')
+
     fin_score_command = material_scorer + ' -m ' + score_out_folder + ' -w ' + os.path.join(base_out_folder, 'FinalAWQVscore.txt')
-    print ('Calculating global AQWV score ..')
     subprocess.call(fin_score_command, shell=True)
-    print ('FINISHED! Official AQWV score at ' + os.path.join(base_out_folder, 'FinalAWQVscore.txt') )
+    print ('Official AQWV score at ' + os.path.join(base_out_folder, 'FinalAWQVscore.txt') )
+    subprocess.call(['cat',os.path.join(base_out_folder, 'FinalAWQVscore.txt')])
 
 
-
-def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, system_id, dataset_name, max_hits):
+def eval_AQWV(query_file, reference_file, output_path, search, es_index, system_id, dataset_name, max_hits, run_official_AQWV, verbose):
     #Create output_path if it doesn't exist
     if not os.path.exists(output_path):
         os.mkdir(output_path)
-    
-    #Generate list of documents (for NIST script)
-    with open(os.path.join(output_path, dataset_name + '_CLIR_AllDocIDs.tsv'), 'w') as f_datasetDocIDs:
-        f_datasetDocIDs.write(dataset_name + '\n')
-        es = Elasticsearch()
-        r = es.search(index = es_index, body = {'query': {'match_all': {}}}, filter_path=['hits.hits._id'], size = 10000)
-        for d in r['hits']['hits']:
-            f_datasetDocIDs.write(d['_id'] + '\n')
-    
+        
     #File to store search output
     SEARCH_OUT = os.path.join(output_path, "search_output.txt")
-
-    #File to store <SystemOutputFiles> of every query
-    SYSTEM_OUT_FILES = os.path.join(output_path, "SystemOutputFiles")
-    if not os.path.exists(SYSTEM_OUT_FILES):
-        os.mkdir(SYSTEM_OUT_FILES)
-
     f_out = open(SEARCH_OUT,'w')
+
+    if run_official_AQWV:
+        #File to store <SystemOutputFiles> of every query
+        SYSTEM_OUT_FILES = os.path.join(output_path, "SystemOutputFiles")
+        if not os.path.exists(SYSTEM_OUT_FILES):
+            os.mkdir(SYSTEM_OUT_FILES)
+
+
+    #Count the number of documents
+    es = Elasticsearch()
+    r = es.search(index = es_index, body = {'size' : '0', 'query' : {}})
+    N_total = int(r['hits']['total'])
+    
+    #Run query
     queries = get_queries(query_file)
 
     if queries is None or len(queries) == 0:
@@ -373,48 +348,37 @@ def eval(query_file, ref_out_file, output_path, TREC_PATH, search, es_index, sys
     for q_num in queries:  
         q_string =  queries[q_num]['parsed']
 
-        #Create a query file for this qID
-        with open(os.path.join(SYSTEM_OUT_FILES, 'q-' + str(q_num) + '.tsv'), 'w') as f:
-            f.write(str(q_num) + '\t' + queries[q_num]['original'] + '\n')
+        res = search(es_index, system_id, q_string, max_hits)
+        if int(res['hits']['total']) == 0:
+            f_out.write(str(q_num) + " " + "1 NO_HIT -1 1.0 STANDARD\n")
+        else:
+            normalize_scores(res)
+            for each_doc in res['hits']['hits']:
+                f_out.write(str(q_num) + " " + "1" + " " + each_doc['_id'] + " " + "-1" + " " + str(each_doc['_score']) + " " + "STANDARD" + "\n")
+
         
-            res = search(es_index, system_id, q_string, max_hits) 
-            if int(res['hits']['total']) == 0:
-                f_out.write(str(q_num) + " " + "1 NO_HIT -1 1.0 STANDARD\n")
-            else:
-                normalize_scores(res)
+        if run_official_AQWV:
+        #Create a query file for this qID
+            with open(os.path.join(SYSTEM_OUT_FILES, 'q-' + str(q_num) + '.tsv'), 'w') as f:
+                f.write(str(q_num) + '\t' + queries[q_num]['original'] + '\n')
                 for each_doc in res['hits']['hits']:
-                    f_out.write(str(q_num) + " " + "1" + " " + each_doc['_id'] + " " + "-1" + " " + str(each_doc['_score']) + " " + "STANDARD" + "\n")
                     f.write(each_doc['_id'] + '\t' + "{0:.3f}".format(each_doc['_score']) + '\n')
 
-    
-    #Create <answerkeyfile> , default setting task to CLIR
-    dataset_name += '_CLIR_'
-    create_AnswerKeyFile(output_path, dataset_name, ref_out_file, queries)
 
-
-    
     f_out.close()
+    compute_AQWV(reference_file, SEARCH_OUT, N_total, max_hits)
+    
+    if run_official_AQWV:
+        #Create <answerkeyfile> , default setting task to CLIR
+        create_DocumentList(output_path, dataset_name, es_index)
+        dataset_name += '_CLIR_'
+        compute_AQWV_official(output_path, dataset_name, reference_file, queries)
+    
         
-    AQWV(ref_out_file, SEARCH_OUT, es_index, max_hits)
-    
-    #Run trec-eval
-    # TREC_EXEC = os.path.join(TREC_PATH,'trec_eval')
-    # if not os.path.isfile(TREC_EXEC):
-    #     print ("\nFailed to find ",TREC_EXEC)
-    #     sys.exit
-    
-    # #File to store final output
-    # FIN_OUT = os.path.join(output_path, "results.txt")
-    # fin_out = open(FIN_OUT, 'w')
-    # print (subprocess.list2cmdline([TREC_EXEC, ref_out_file, SEARCH_OUT]))
-    # subprocess.call([TREC_EXEC, ref_out_file, SEARCH_OUT], stdout = fin_out)
-    # fin_out.close()
-    # prec_recall_graph(output_path, FIN_OUT)
-    # return FIN_OUT
 
 
 if __name__ == '__main__':
-    USAGE = '\nUSAGE : python eval.py <config-file> \n'
+    USAGE = '\nUSAGE : python eval_AQWV.py <config-file> \n'
     
     if len(sys.argv) != 2:
         print (USAGE)
@@ -424,7 +388,6 @@ if __name__ == '__main__':
     parser.read(sys.argv[1])
     
     if not (parser.has_option('Evaluation', 'search_script') or 
-            parser.has_option('Evaluation', 'trec_eval_path') or
             parser.has_option('Evaluation', 'query_file') or
             parser.has_option('Evaluation', 'reference_file') or
             parser.has_option('Indexer', 'system_id') or
@@ -433,7 +396,6 @@ if __name__ == '__main__':
         sys.exit()
 
     search_script = parser.get('Evaluation', 'search_script')
-    TREC_PATH = parser.get('Evaluation', 'trec_eval_path')
     query_file = parser.get('Evaluation', 'query_file')
     reference_file = parser.get('Evaluation', 'reference_file')
     output_path = parser.get('Evaluation', 'output_path')
@@ -441,8 +403,9 @@ if __name__ == '__main__':
     es_index = parser.get('Indexer', 'index')
     dataset_name = parser.get('Indexer', 'dataset_name')
     max_hits = int(parser.get('Evaluation', 'max_hits'))
-    
-    
+    run_official_AQWV = parser.getboolean('Evaluation', 'run_official_AQWV')
+    verbose = int(parser.get('Evaluation', 'verbose'))
+
     #Import search module
     search_dir, search_file = os.path.split(search_script)
     if search_dir != '':
@@ -454,5 +417,5 @@ if __name__ == '__main__':
     else:
         mod = importlib.import_module(search_file.replace('.py', ''))
         search_func = getattr(mod, 'search')   
-    
-    eval(query_file, reference_file, output_path, TREC_PATH, search_func, es_index, system_id, dataset_name, max_hits)
+
+    eval_AQWV(query_file, reference_file, output_path, search_func, es_index, system_id, dataset_name, max_hits, run_official_AQWV, verbose)
